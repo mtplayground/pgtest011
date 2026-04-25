@@ -1,3 +1,6 @@
+#[path = "components/todo_app.rs"]
+mod todo_app;
+
 use leptos::hydration::{AutoReload, HydrationScripts};
 use leptos::prelude::*;
 use leptos_meta::{MetaTags, Stylesheet, Title, provide_meta_context};
@@ -5,6 +8,8 @@ use leptos_router::{
     StaticSegment,
     components::{Route, Router, Routes},
 };
+
+use self::todo_app::TodoApp;
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
     view! {
@@ -35,65 +40,9 @@ pub fn App() -> impl IntoView {
         <Router>
             <main class="app-shell">
                 <Routes fallback=|| view! { <p>"Page not found."</p> }>
-                    <Route path=StaticSegment("") view=HomePage />
+                    <Route path=StaticSegment("") view=TodoApp />
                 </Routes>
             </main>
         </Router>
-    }
-}
-
-#[component]
-fn HomePage() -> impl IntoView {
-    view! {
-        <>
-            <section class="todoapp">
-                <header class="header">
-                    <h1>"todos"</h1>
-                    <input
-                        class="new-todo"
-                        placeholder="What needs to be done?"
-                        readonly
-                        value=""
-                    />
-                </header>
-
-                <section class="main">
-                    <input id="toggle-all" class="toggle-all" type="checkbox" disabled />
-                    <label for="toggle-all">"Mark all as complete"</label>
-
-                    <ul class="todo-list">
-                        <li>
-                            <div class="view">
-                                <input class="toggle" type="checkbox" disabled />
-                                <label>"TodoMVC shell wired"</label>
-                                <button class="destroy" disabled></button>
-                            </div>
-                        </li>
-                    </ul>
-                </section>
-
-                <footer class="footer">
-                    <span class="todo-count">
-                        <strong>"1"</strong>
-                        " item left"
-                    </span>
-
-                    <ul class="filters">
-                        <li><a class="selected" href="/">"All"</a></li>
-                        <li><a href="/active">"Active"</a></li>
-                        <li><a href="/completed">"Completed"</a></li>
-                    </ul>
-
-                    <button class="clear-completed" disabled>
-                        "Clear completed"
-                    </button>
-                </footer>
-            </section>
-
-            <footer class="info">
-                <p>"Double-click to edit a todo"</p>
-                <p>"Created for the TodoMVC reference layout"</p>
-            </footer>
-        </>
     }
 }
