@@ -16,8 +16,18 @@ use pgtest011::{
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/api/todos", get(list_todos).post(create_todo))
-        .route("/api/todos/:id", get(get_todo).patch(update_todo))
+        .route(
+            "/api/todos",
+            get(list_todos).post(create_todo).delete(delete_todos),
+        )
+        .route(
+            "/api/todos/toggle-all",
+            axum::routing::post(toggle_all_todos),
+        )
+        .route(
+            "/api/todos/:id",
+            get(get_todo).patch(update_todo).delete(delete_todo),
+        )
 }
 
 #[derive(Debug, Deserialize)]
@@ -34,6 +44,16 @@ struct CreateTodoRequest {
 struct UpdateTodoRequest {
     title: Option<String>,
     completed: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DeleteTodosQuery {
+    completed: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ToggleAllRequest {
+    completed: bool,
 }
 
 async fn list_todos(
@@ -86,6 +106,22 @@ async fn create_todo(
     Ok((StatusCode::CREATED, Json(todo)))
 }
 
+async fn delete_todos(
+    State(pool): State<PgPool>,
+    Query(query): Query<DeleteTodosQuery>,
+) -> Result<StatusCode, AppError> {
+    if query.completed != Some(true) {
+        return Err(AppError::bad_request(
+            "bulk delete requires `completed=true`",
+        ));
+    }
+
+    let repository = TodoRepository::new(pool);
+    repository.delete_completed().await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn update_todo(
     State(pool): State<PgPool>,
     Path(todo_id): Path<String>,
@@ -119,6 +155,34 @@ async fn update_todo(
         .ok_or_else(|| AppError::not_found(format!("todo `{todo_id}` was not found")))?;
 
     Ok(Json(todo))
+}
+
+async fn toggle_all_todos(
+    State(pool): State<PgPool>,
+    Json(payload): Json<ToggleAllRequest>,
+) -> Result<StatusCode, AppError> {
+    let repository = TodoRepository::new(pool);
+    repository.set_all_completed(payload.completed).await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn delete_todo(
+    State(pool): State<PgPool>,
+    Path(todo_id): Path<String>,
+) -> Result<StatusCode, AppError> {
+    let todo_id =
+        Uuid::parse_str(&todo_id).map_err(|_| AppError::bad_request("invalid todo id"))?;
+    let repository = TodoRepository::new(pool);
+
+    let deleted = repository.delete(todo_id).await?;
+    if !deleted {
+        return Err(AppError::not_found(format!(
+            "todo `{todo_id}` was not found"
+        )));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn get_todo(
