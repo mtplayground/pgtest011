@@ -8,7 +8,10 @@ mod todo_item;
 use leptos::prelude::*;
 use leptos_router::{NavigateOptions, hooks::use_navigate};
 
-use crate::{models::todo::Todo, server_fns::todo_fns::list_todos};
+use crate::{
+    models::todo::Todo,
+    server_fns::todo_fns::{list_todos, toggle_all as toggle_all_todos},
+};
 
 use self::new_todo::NewTodo;
 pub use self::todo_footer::TodoFilter;
@@ -31,25 +34,43 @@ pub fn TodoApp(filter: TodoFilter) -> impl IntoView {
         move || active_filter.get(),
         |filter| async move { list_todos(filter.status()).await },
     );
+    let all_todos = Resource::new(|| (), |_| async move { list_todos(None).await });
     let refetch_todos = {
         let todos = todos.clone();
-        move || todos.refetch()
+        let all_todos = all_todos.clone();
+        move || {
+            todos.refetch();
+            all_todos.refetch();
+        }
     };
+    let toggle_all_action = Action::new(|completed: &bool| {
+        let completed = *completed;
+        async move { toggle_all_todos(completed).await }
+    });
 
-    let item_count = move || match todos.get() {
+    Effect::new(move |_| {
+        if let Some(result) = toggle_all_action.value().get() {
+            if result.is_ok() {
+                refetch_todos();
+            }
+        }
+    });
+
+    let item_count = move || match all_todos.get() {
         Some(Ok(items)) => items.len(),
         _ => 0,
     };
-    let active_count = Signal::derive(move || match todos.get() {
+    let active_count = Signal::derive(move || match all_todos.get() {
         Some(Ok(items)) => items.iter().filter(|todo| !todo.completed).count(),
         _ => 0,
     });
-    let completed_count = Signal::derive(move || match todos.get() {
+    let completed_count = Signal::derive(move || match all_todos.get() {
         Some(Ok(items)) => items.iter().filter(|todo| todo.completed).count(),
         _ => 0,
     });
+    let all_completed = Signal::derive(move || item_count() > 0 && active_count.get() == 0);
     let has_items = move || item_count() > 0;
-    let show_main = move || match todos.get() {
+    let show_main = move || match all_todos.get() {
         None => true,
         Some(Err(_)) => true,
         Some(Ok(items)) => !items.is_empty(),
@@ -65,7 +86,16 @@ pub fn TodoApp(filter: TodoFilter) -> impl IntoView {
 
                 <Show when=show_main fallback=|| ()>
                     <section class="main">
-                        <input id="toggle-all" class="toggle-all" type="checkbox" disabled />
+                        <input
+                            id="toggle-all"
+                            class="toggle-all"
+                            type="checkbox"
+                            prop:checked=move || all_completed.get()
+                            disabled=move || item_count() == 0 || toggle_all_action.pending().get()
+                            on:change=move |_| {
+                                toggle_all_action.dispatch(!all_completed.get_untracked());
+                            }
+                        />
                         <label for="toggle-all">"Mark all as complete"</label>
 
                         <ul class="todo-list">
