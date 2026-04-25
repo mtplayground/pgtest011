@@ -1,6 +1,9 @@
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
+    extract::{
+        Path, Query, State,
+        rejection::{JsonRejection, QueryRejection},
+    },
     http::StatusCode,
     routing::get,
 };
@@ -58,8 +61,9 @@ struct ToggleAllRequest {
 
 async fn list_todos(
     State(pool): State<PgPool>,
-    Query(query): Query<ListTodosQuery>,
+    query: Result<Query<ListTodosQuery>, QueryRejection>,
 ) -> Result<Json<Vec<Todo>>, AppError> {
+    let Query(query) = query.map_err(AppError::from_query_rejection)?;
     let repository = TodoRepository::new(pool);
 
     let todos = match query.status.as_deref().unwrap_or("all") {
@@ -67,7 +71,7 @@ async fn list_todos(
         "active" => repository.list_by_status(TodoStatus::Active).await?,
         "completed" => repository.list_by_status(TodoStatus::Completed).await?,
         other => {
-            return Err(AppError::bad_request(format!(
+            return Err(AppError::validation(format!(
                 "unsupported status filter `{other}`"
             )));
         }
@@ -78,11 +82,12 @@ async fn list_todos(
 
 async fn create_todo(
     State(pool): State<PgPool>,
-    Json(payload): Json<CreateTodoRequest>,
+    payload: Result<Json<CreateTodoRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Json<Todo>), AppError> {
+    let Json(payload) = payload.map_err(AppError::from_json_rejection)?;
     let title = payload.title.trim();
     if title.is_empty() {
-        return Err(AppError::bad_request("title must not be empty"));
+        return Err(AppError::validation("title must not be empty"));
     }
 
     let next_position = sqlx::query_scalar::<_, i64>(
@@ -108,10 +113,11 @@ async fn create_todo(
 
 async fn delete_todos(
     State(pool): State<PgPool>,
-    Query(query): Query<DeleteTodosQuery>,
+    query: Result<Query<DeleteTodosQuery>, QueryRejection>,
 ) -> Result<StatusCode, AppError> {
+    let Query(query) = query.map_err(AppError::from_query_rejection)?;
     if query.completed != Some(true) {
-        return Err(AppError::bad_request(
+        return Err(AppError::validation(
             "bulk delete requires `completed=true`",
         ));
     }
@@ -125,17 +131,17 @@ async fn delete_todos(
 async fn update_todo(
     State(pool): State<PgPool>,
     Path(todo_id): Path<String>,
-    Json(payload): Json<UpdateTodoRequest>,
+    payload: Result<Json<UpdateTodoRequest>, JsonRejection>,
 ) -> Result<Json<Todo>, AppError> {
-    let todo_id =
-        Uuid::parse_str(&todo_id).map_err(|_| AppError::bad_request("invalid todo id"))?;
+    let Json(payload) = payload.map_err(AppError::from_json_rejection)?;
+    let todo_id = Uuid::parse_str(&todo_id).map_err(|_| AppError::validation("invalid todo id"))?;
     let repository = TodoRepository::new(pool);
 
     let title = match payload.title {
         Some(title) => {
             let trimmed = title.trim();
             if trimmed.is_empty() {
-                return Err(AppError::bad_request("title must not be empty"));
+                return Err(AppError::validation("title must not be empty"));
             }
             Some(trimmed.to_string())
         }
@@ -159,8 +165,9 @@ async fn update_todo(
 
 async fn toggle_all_todos(
     State(pool): State<PgPool>,
-    Json(payload): Json<ToggleAllRequest>,
+    payload: Result<Json<ToggleAllRequest>, JsonRejection>,
 ) -> Result<StatusCode, AppError> {
+    let Json(payload) = payload.map_err(AppError::from_json_rejection)?;
     let repository = TodoRepository::new(pool);
     repository.set_all_completed(payload.completed).await?;
 
@@ -171,8 +178,7 @@ async fn delete_todo(
     State(pool): State<PgPool>,
     Path(todo_id): Path<String>,
 ) -> Result<StatusCode, AppError> {
-    let todo_id =
-        Uuid::parse_str(&todo_id).map_err(|_| AppError::bad_request("invalid todo id"))?;
+    let todo_id = Uuid::parse_str(&todo_id).map_err(|_| AppError::validation("invalid todo id"))?;
     let repository = TodoRepository::new(pool);
 
     let deleted = repository.delete(todo_id).await?;
@@ -189,8 +195,7 @@ async fn get_todo(
     State(pool): State<PgPool>,
     Path(todo_id): Path<String>,
 ) -> Result<Json<Todo>, AppError> {
-    let todo_id =
-        Uuid::parse_str(&todo_id).map_err(|_| AppError::bad_request("invalid todo id"))?;
+    let todo_id = Uuid::parse_str(&todo_id).map_err(|_| AppError::validation("invalid todo id"))?;
     let repository = TodoRepository::new(pool);
 
     let todo = repository
