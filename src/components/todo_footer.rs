@@ -18,7 +18,7 @@ impl TodoFilter {
         }
     }
 
-    fn href(self) -> &'static str {
+    pub fn href(self) -> &'static str {
         match self {
             Self::All => "/",
             Self::Active => "/active",

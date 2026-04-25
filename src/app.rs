@@ -9,7 +9,7 @@ use leptos_router::{
     components::{Route, Router, Routes},
 };
 
-use self::todo_app::TodoApp;
+use self::todo_app::{TodoApp, TodoFilter};
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
     view! {
@@ -40,9 +40,26 @@ pub fn App() -> impl IntoView {
         <Router>
             <main class="app-shell">
                 <Routes fallback=|| view! { <p>"Page not found."</p> }>
-                    <Route path=StaticSegment("") view=TodoApp />
+                    <Route path=StaticSegment("") view=AllTodosPage />
+                    <Route path=StaticSegment("active") view=ActiveTodosPage />
+                    <Route path=StaticSegment("completed") view=CompletedTodosPage />
                 </Routes>
             </main>
         </Router>
     }
+}
+
+#[component]
+fn AllTodosPage() -> impl IntoView {
+    view! { <TodoApp filter=TodoFilter::All /> }
+}
+
+#[component]
+fn ActiveTodosPage() -> impl IntoView {
+    view! { <TodoApp filter=TodoFilter::Active /> }
+}
+
+#[component]
+fn CompletedTodosPage() -> impl IntoView {
+    view! { <TodoApp filter=TodoFilter::Completed /> }
 }

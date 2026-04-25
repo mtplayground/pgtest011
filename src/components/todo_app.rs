@@ -6,16 +6,26 @@ mod todo_footer;
 mod todo_item;
 
 use leptos::prelude::*;
+use leptos_router::{NavigateOptions, hooks::use_navigate};
 
 use crate::{models::todo::Todo, server_fns::todo_fns::list_todos};
 
 use self::new_todo::NewTodo;
-use self::todo_footer::{TodoFilter, TodoFooter};
+pub use self::todo_footer::TodoFilter;
+use self::todo_footer::TodoFooter;
 use self::todo_item::TodoItem;
 
 #[component]
-pub fn TodoApp() -> impl IntoView {
-    let (active_filter, set_active_filter) = signal(TodoFilter::All);
+pub fn TodoApp(filter: TodoFilter) -> impl IntoView {
+    let navigate = use_navigate();
+    let (active_filter, set_active_filter) = signal(filter);
+
+    Effect::new(move |_| {
+        let selected_filter = active_filter.get();
+        if selected_filter != filter {
+            let _ = navigate(selected_filter.href(), NavigateOptions::default());
+        }
+    });
 
     let todos = Resource::new(
         move || active_filter.get(),
