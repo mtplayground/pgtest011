@@ -1,4 +1,12 @@
 pub mod app;
+pub mod models {
+    pub mod todo;
+}
+
+#[cfg(feature = "ssr")]
+pub mod repo {
+    pub mod todo_repo;
+}
 
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen]
