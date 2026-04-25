@@ -10,14 +10,14 @@ use uuid::Uuid;
 
 use crate::{db::AppState, error::AppError};
 use pgtest011::{
-    models::todo::{NewTodo, Todo, TodoStatus},
+    models::todo::{NewTodo, Todo, TodoStatus, UpdateTodo},
     repo::todo_repo::TodoRepository,
 };
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/todos", get(list_todos).post(create_todo))
-        .route("/api/todos/:id", get(get_todo))
+        .route("/api/todos/:id", get(get_todo).patch(update_todo))
 }
 
 #[derive(Debug, Deserialize)]
@@ -28,6 +28,12 @@ struct ListTodosQuery {
 #[derive(Debug, Deserialize)]
 struct CreateTodoRequest {
     title: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateTodoRequest {
+    title: Option<String>,
+    completed: Option<bool>,
 }
 
 async fn list_todos(
@@ -78,6 +84,41 @@ async fn create_todo(
         .await?;
 
     Ok((StatusCode::CREATED, Json(todo)))
+}
+
+async fn update_todo(
+    State(pool): State<PgPool>,
+    Path(todo_id): Path<String>,
+    Json(payload): Json<UpdateTodoRequest>,
+) -> Result<Json<Todo>, AppError> {
+    let todo_id =
+        Uuid::parse_str(&todo_id).map_err(|_| AppError::bad_request("invalid todo id"))?;
+    let repository = TodoRepository::new(pool);
+
+    let title = match payload.title {
+        Some(title) => {
+            let trimmed = title.trim();
+            if trimmed.is_empty() {
+                return Err(AppError::bad_request("title must not be empty"));
+            }
+            Some(trimmed.to_string())
+        }
+        None => None,
+    };
+
+    let todo = repository
+        .update(
+            todo_id,
+            UpdateTodo {
+                title,
+                completed: payload.completed,
+                position: None,
+            },
+        )
+        .await?
+        .ok_or_else(|| AppError::not_found(format!("todo `{todo_id}` was not found")))?;
+
+    Ok(Json(todo))
 }
 
 async fn get_todo(
