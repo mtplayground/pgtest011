@@ -28,7 +28,7 @@ pub fn router() -> Router<AppState> {
             axum::routing::post(toggle_all_todos),
         )
         .route(
-            "/api/todos/:id",
+            "/api/todos/{id}",
             get(get_todo).patch(update_todo).delete(delete_todo),
         )
 }
