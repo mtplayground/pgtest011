@@ -1,9 +1,14 @@
+#[path = "new_todo.rs"]
+mod new_todo;
+
 use leptos::{ev, prelude::*};
 
 use crate::{
     models::todo::{Todo, TodoStatus},
     server_fns::todo_fns::list_todos,
 };
+
+use self::new_todo::NewTodo;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ActiveFilter {
@@ -46,6 +51,10 @@ pub fn TodoApp() -> impl IntoView {
         move || active_filter.get(),
         |filter| async move { list_todos(filter.status()).await },
     );
+    let refetch_todos = {
+        let todos = todos.clone();
+        move || todos.refetch()
+    };
 
     let item_count = move || match todos.get() {
         Some(Ok(items)) => items.len(),
@@ -71,12 +80,7 @@ pub fn TodoApp() -> impl IntoView {
             <section class="todoapp">
                 <header class="header">
                     <h1>"todos"</h1>
-                    <input
-                        class="new-todo"
-                        placeholder="What needs to be done?"
-                        readonly
-                        value=""
-                    />
+                    <NewTodo on_created=refetch_todos />
                 </header>
 
                 <Show when=show_main fallback=|| ()>
