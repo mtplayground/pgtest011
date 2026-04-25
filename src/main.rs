@@ -3,8 +3,11 @@ mod config;
 #[cfg(feature = "ssr")]
 mod db;
 #[cfg(feature = "ssr")]
+mod error;
+#[cfg(feature = "ssr")]
 mod routes {
     pub mod health;
+    pub mod todos;
 }
 
 #[cfg(feature = "ssr")]
@@ -30,12 +33,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     leptos_options.site_addr = app_config.site_addr;
 
     let addr = leptos_options.site_addr;
-    let routes = generate_route_list(App);
+    let route_list = generate_route_list(App);
     let state = AppState::new(leptos_options.clone(), pool);
 
     let app = Router::<AppState>::new()
         .merge(routes::health::router())
-        .leptos_routes(&state, routes, {
+        .merge(routes::todos::router())
+        .leptos_routes(&state, route_list, {
             let leptos_options = leptos_options.clone();
             move || shell(leptos_options.clone())
         })
