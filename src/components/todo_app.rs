@@ -1,54 +1,21 @@
 #[path = "new_todo.rs"]
 mod new_todo;
+#[path = "todo_footer.rs"]
+mod todo_footer;
 #[path = "todo_item.rs"]
 mod todo_item;
 
-use leptos::{ev, prelude::*};
+use leptos::prelude::*;
 
-use crate::{
-    models::todo::{Todo, TodoStatus},
-    server_fns::todo_fns::list_todos,
-};
+use crate::{models::todo::Todo, server_fns::todo_fns::list_todos};
 
 use self::new_todo::NewTodo;
+use self::todo_footer::{TodoFilter, TodoFooter};
 use self::todo_item::TodoItem;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ActiveFilter {
-    All,
-    Active,
-    Completed,
-}
-
-impl ActiveFilter {
-    fn status(self) -> Option<TodoStatus> {
-        match self {
-            Self::All => None,
-            Self::Active => Some(TodoStatus::Active),
-            Self::Completed => Some(TodoStatus::Completed),
-        }
-    }
-
-    fn href(self) -> &'static str {
-        match self {
-            Self::All => "/",
-            Self::Active => "/active",
-            Self::Completed => "/completed",
-        }
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            Self::All => "All",
-            Self::Active => "Active",
-            Self::Completed => "Completed",
-        }
-    }
-}
 
 #[component]
 pub fn TodoApp() -> impl IntoView {
-    let (active_filter, set_active_filter) = signal(ActiveFilter::All);
+    let (active_filter, set_active_filter) = signal(TodoFilter::All);
 
     let todos = Resource::new(
         move || active_filter.get(),
@@ -63,14 +30,14 @@ pub fn TodoApp() -> impl IntoView {
         Some(Ok(items)) => items.len(),
         _ => 0,
     };
-    let active_count = move || match todos.get() {
+    let active_count = Signal::derive(move || match todos.get() {
         Some(Ok(items)) => items.iter().filter(|todo| !todo.completed).count(),
         _ => 0,
-    };
-    let completed_count = move || match todos.get() {
+    });
+    let completed_count = Signal::derive(move || match todos.get() {
         Some(Ok(items)) => items.iter().filter(|todo| todo.completed).count(),
         _ => 0,
-    };
+    });
     let has_items = move || item_count() > 0;
     let show_main = move || match todos.get() {
         None => true,
@@ -116,49 +83,13 @@ pub fn TodoApp() -> impl IntoView {
                 </Show>
 
                 <Show when=has_items fallback=|| ()>
-                    <footer class="footer">
-                        <span class="todo-count">
-                            <strong>{active_count}</strong>
-                            {move || {
-                                if active_count() == 1 {
-                                    " item left"
-                                } else {
-                                    " items left"
-                                }
-                            }}
-                        </span>
-
-                        <ul class="filters">
-                            {[
-                                ActiveFilter::All,
-                                ActiveFilter::Active,
-                                ActiveFilter::Completed,
-                            ]
-                                .into_iter()
-                                .map(|filter| {
-                                    let set_active_filter = set_active_filter;
-                                    view! {
-                                        <li>
-                                            <a
-                                                href=filter.href()
-                                                class:selected=move || active_filter.get() == filter
-                                                on:click=move |event: ev::MouseEvent| {
-                                                    event.prevent_default();
-                                                    set_active_filter.set(filter);
-                                                }
-                                            >
-                                                {filter.label()}
-                                            </a>
-                                        </li>
-                                    }
-                                })
-                                .collect_view()}
-                        </ul>
-
-                        <button class="clear-completed" disabled=move || completed_count() == 0>
-                            "Clear completed"
-                        </button>
-                    </footer>
+                    <TodoFooter
+                        active_count
+                        completed_count
+                        current_filter=active_filter
+                        set_filter=set_active_filter
+                        on_cleared=refetch_todos
+                    />
                 </Show>
             </section>
 
