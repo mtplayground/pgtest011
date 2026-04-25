@@ -1,5 +1,7 @@
 #[path = "new_todo.rs"]
 mod new_todo;
+#[path = "todo_item.rs"]
+mod todo_item;
 
 use leptos::{ev, prelude::*};
 
@@ -9,6 +11,7 @@ use crate::{
 };
 
 use self::new_todo::NewTodo;
+use self::todo_item::TodoItem;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ActiveFilter {
@@ -106,7 +109,7 @@ pub fn TodoApp() -> impl IntoView {
                                     </li>
                                 }
                                     .into_any(),
-                                Some(Ok(items)) => render_todo_items(items).into_any(),
+                                Some(Ok(items)) => render_todo_items(items, refetch_todos).into_any(),
                             }}
                         </ul>
                     </section>
@@ -167,18 +170,15 @@ pub fn TodoApp() -> impl IntoView {
     }
 }
 
-fn render_todo_items(items: Vec<Todo>) -> impl IntoView {
+fn render_todo_items<F>(items: Vec<Todo>, on_change: F) -> impl IntoView
+where
+    F: Fn() + Copy + Send + Sync + 'static,
+{
     items
         .into_iter()
         .map(|todo| {
             view! {
-                <li class:completed=todo.completed>
-                    <div class="view">
-                        <input class="toggle" type="checkbox" checked=todo.completed disabled />
-                        <label>{todo.title}</label>
-                        <button class="destroy" disabled></button>
-                    </div>
-                </li>
+                <TodoItem todo on_change />
             }
         })
         .collect_view()
