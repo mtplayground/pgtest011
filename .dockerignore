@@ -1,0 +1,12 @@
+.git
+.github
+.claude
+target
+node_modules
+.env
+.env.*
+!.env.example
+.gh_token
+.database_url
+.progress
+docker-compose.yml
