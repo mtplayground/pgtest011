@@ -2,6 +2,10 @@
 mod config;
 #[cfg(feature = "ssr")]
 mod db;
+#[cfg(feature = "ssr")]
+mod routes {
+    pub mod health;
+}
 
 #[cfg(feature = "ssr")]
 #[tokio::main]
@@ -30,6 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let state = AppState::new(leptos_options.clone(), pool);
 
     let app = Router::<AppState>::new()
+        .merge(routes::health::router())
         .leptos_routes(&state, routes, {
             let leptos_options = leptos_options.clone();
             move || shell(leptos_options.clone())
