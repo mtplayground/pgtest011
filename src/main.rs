@@ -19,6 +19,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     initialize_tracing(&app_config)?;
 
     let pool = create_pool(&app_config.database_url).await?;
+    sqlx::migrate!().run(&pool).await?;
+
     let conf = get_configuration(Some("Cargo.toml"))?;
     let mut leptos_options = conf.leptos_options;
     leptos_options.site_addr = app_config.site_addr;
@@ -41,6 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         port = app_config.port,
         database_pool_ready = true,
         database_pool_max_connections = DEFAULT_MAX_DB_CONNECTIONS,
+        database_migrations_ready = true,
         "starting pgtest011 server"
     );
 

@@ -14,7 +14,7 @@ leptos = { version = "0.8" }
 leptos_axum = { version = "0.8", optional = true }
 leptos_meta = { version = "0.8" }
 leptos_router = { version = "0.8" }
-sqlx = { version = "0.8", default-features = false, features = ["postgres", "runtime-tokio", "macros", "chrono", "uuid", "tls-rustls-ring-webpki"], optional = true }
+sqlx = { version = "0.8", default-features = false, features = ["postgres", "runtime-tokio", "macros", "chrono", "uuid", "migrate", "tls-rustls-ring-webpki"], optional = true }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"], optional = true }
 tracing = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"], optional = true }
