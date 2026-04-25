@@ -1,3 +1,5 @@
+#[path = "error_banner.rs"]
+mod error_banner;
 #[path = "new_todo.rs"]
 mod new_todo;
 #[path = "todo_footer.rs"]
@@ -13,6 +15,7 @@ use crate::{
     server_fns::todo_fns::{list_todos, toggle_all as toggle_all_todos},
 };
 
+use self::error_banner::ErrorBanner;
 use self::new_todo::NewTodo;
 pub use self::todo_footer::TodoFilter;
 use self::todo_footer::TodoFooter;
@@ -43,6 +46,7 @@ pub fn TodoApp(filter: TodoFilter) -> impl IntoView {
             all_todos.refetch();
         }
     };
+    let (mutation_error, set_mutation_error) = signal(None::<String>);
     let toggle_all_action = Action::new(|completed: &bool| {
         let completed = *completed;
         async move { toggle_all_todos(completed).await }
@@ -50,8 +54,14 @@ pub fn TodoApp(filter: TodoFilter) -> impl IntoView {
 
     Effect::new(move |_| {
         if let Some(result) = toggle_all_action.value().get() {
-            if result.is_ok() {
-                refetch_todos();
+            match result {
+                Ok(_) => {
+                    set_mutation_error.set(None);
+                    refetch_todos();
+                }
+                Err(error) => {
+                    set_mutation_error.set(Some(error.to_string()));
+                }
             }
         }
     });
@@ -75,6 +85,13 @@ pub fn TodoApp(filter: TodoFilter) -> impl IntoView {
         Some(Err(_)) => true,
         Some(Ok(items)) => !items.is_empty(),
     };
+    let resource_error = Signal::derive(move || match (all_todos.get(), todos.get()) {
+        (Some(Err(error)), _) => Some(format!("Unable to load todos: {error}")),
+        (_, Some(Err(error))) => Some(format!("Unable to load todos: {error}")),
+        _ => None,
+    });
+    let error_message =
+        Signal::derive(move || mutation_error.get().or_else(|| resource_error.get()));
 
     view! {
         <>
@@ -83,6 +100,8 @@ pub fn TodoApp(filter: TodoFilter) -> impl IntoView {
                     <h1>"todos"</h1>
                     <NewTodo on_created=refetch_todos />
                 </header>
+
+                <ErrorBanner message=error_message on_clear=move || set_mutation_error.set(None) />
 
                 <Show when=show_main fallback=|| ()>
                     <section class="main">
@@ -98,39 +117,47 @@ pub fn TodoApp(filter: TodoFilter) -> impl IntoView {
                         />
                         <label for="toggle-all">"Mark all as complete"</label>
 
-                        <ul class="todo-list">
-                            {move || match todos.get() {
-                                None => view! {
+                        <Transition
+                            fallback=move || view! {
+                                <ul class="todo-list">
                                     <li class="todo-list-status">
                                         <div class="view">
                                             <label>"Loading todos..."</label>
                                         </div>
                                     </li>
+                                </ul>
+                            }
+                        >
+                            {move || match todos.get() {
+                                Some(Ok(items)) => view! {
+                                    <ul class="todo-list">{render_todo_items(items, refetch_todos)}</ul>
                                 }
                                     .into_any(),
-                                Some(Err(error)) => view! {
-                                    <li class="todo-list-status">
-                                        <div class="view">
-                                            <label>{format!("Unable to load todos: {error}")}</label>
-                                        </div>
-                                    </li>
-                                }
-                                    .into_any(),
-                                Some(Ok(items)) => render_todo_items(items, refetch_todos).into_any(),
+                                Some(Err(_)) => view! { <ul class="todo-list"></ul> }.into_any(),
+                                None => view! { <ul class="todo-list"></ul> }.into_any(),
                             }}
-                        </ul>
+                        </Transition>
                     </section>
                 </Show>
 
-                <Show when=has_items fallback=|| ()>
-                    <TodoFooter
-                        active_count
-                        completed_count
-                        current_filter=active_filter
-                        set_filter=set_active_filter
-                        on_cleared=refetch_todos
-                    />
-                </Show>
+                <Suspense fallback=|| ()>
+                    {move || {
+                        if has_items() {
+                            view! {
+                                <TodoFooter
+                                    active_count
+                                    completed_count
+                                    current_filter=active_filter
+                                    set_filter=set_active_filter
+                                    on_cleared=refetch_todos
+                                />
+                            }
+                                .into_any()
+                        } else {
+                            ().into_any()
+                        }
+                    }}
+                </Suspense>
             </section>
 
             <footer class="info">
