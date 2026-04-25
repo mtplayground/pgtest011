@@ -1,5 +1,7 @@
 #[cfg(feature = "ssr")]
 mod config;
+#[cfg(feature = "ssr")]
+mod db;
 
 #[cfg(feature = "ssr")]
 #[tokio::main]
@@ -10,31 +12,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use tracing::info;
 
     use crate::config::AppConfig;
+    use crate::db::{AppState, DEFAULT_MAX_DB_CONNECTIONS, create_pool};
     use pgtest011::app::{App, shell};
 
     let app_config = AppConfig::from_environment()?;
     initialize_tracing(&app_config)?;
 
+    let pool = create_pool(&app_config.database_url).await?;
     let conf = get_configuration(Some("Cargo.toml"))?;
     let mut leptos_options = conf.leptos_options;
     leptos_options.site_addr = app_config.site_addr;
 
     let addr = leptos_options.site_addr;
     let routes = generate_route_list(App);
+    let state = AppState::new(leptos_options.clone(), pool);
 
-    let app = Router::new()
-        .leptos_routes(&leptos_options, routes, {
+    let app = Router::<AppState>::new()
+        .leptos_routes(&state, routes, {
             let leptos_options = leptos_options.clone();
             move || shell(leptos_options.clone())
         })
-        .fallback(leptos_axum::file_and_error_handler(shell))
-        .with_state(leptos_options);
+        .fallback(leptos_axum::file_and_error_handler::<AppState, _>(shell))
+        .with_state(state);
 
     info!(
         app_env = %app_config.app_env,
         host = %app_config.host,
         port = app_config.port,
-        database_configured = !app_config.database_url.is_empty(),
+        database_pool_ready = true,
+        database_pool_max_connections = DEFAULT_MAX_DB_CONNECTIONS,
         "starting pgtest011 server"
     );
 
