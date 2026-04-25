@@ -45,12 +45,55 @@ pub fn App() -> impl IntoView {
 #[component]
 fn HomePage() -> impl IntoView {
     view! {
-        <section class="hero">
-            <p class="eyebrow">"Leptos + Axum"</p>
-            <h1>"Hello, world!"</h1>
-            <p class="copy">
-                "The pgtest011 scaffold is running with server-side rendering and hydration enabled."
-            </p>
-        </section>
+        <>
+            <section class="todoapp">
+                <header class="header">
+                    <h1>"todos"</h1>
+                    <input
+                        class="new-todo"
+                        placeholder="What needs to be done?"
+                        readonly
+                        value=""
+                    />
+                </header>
+
+                <section class="main">
+                    <input id="toggle-all" class="toggle-all" type="checkbox" disabled />
+                    <label for="toggle-all">"Mark all as complete"</label>
+
+                    <ul class="todo-list">
+                        <li>
+                            <div class="view">
+                                <input class="toggle" type="checkbox" disabled />
+                                <label>"TodoMVC shell wired"</label>
+                                <button class="destroy" disabled></button>
+                            </div>
+                        </li>
+                    </ul>
+                </section>
+
+                <footer class="footer">
+                    <span class="todo-count">
+                        <strong>"1"</strong>
+                        " item left"
+                    </span>
+
+                    <ul class="filters">
+                        <li><a class="selected" href="/">"All"</a></li>
+                        <li><a href="/active">"Active"</a></li>
+                        <li><a href="/completed">"Completed"</a></li>
+                    </ul>
+
+                    <button class="clear-completed" disabled>
+                        "Clear completed"
+                    </button>
+                </footer>
+            </section>
+
+            <footer class="info">
+                <p>"Double-click to edit a todo"</p>
+                <p>"Created for the TodoMVC reference layout"</p>
+            </footer>
+        </>
     }
 }
