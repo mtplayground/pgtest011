@@ -1,0 +1,174 @@
+# pgtest011 Architecture Plan
+
+## Goal
+Build a TodoMVC-style application as a Rust Cargo workspace using Leptos for the UI and Axum for HTTP serving, backed by PostgreSQL via `sqlx`, with Docker-based local and production workflows.
+
+## Workspace Structure
+Use a single Cargo workspace from issue #1 so later issues can add code without reorganizing crates:
+
+- `Cargo.toml`
+  Workspace root, shared dependency versions, cargo aliases, lint profile.
+- `crates/web`
+  Leptos application crate containing pages, components, routes, server functions, and UI state.
+- `crates/server`
+  Axum integration crate containing application state, router assembly, REST handlers, health check, error mapping, and startup.
+- `crates/domain`
+  Shared domain types for todos, filters, DTOs, validation helpers, and error enums used by both REST and Leptos server functions.
+- `crates/persistence`
+  Database-facing repository layer, `sqlx` models, migrations wiring, and pool setup.
+- `migrations/`
+  `sqlx` migrations, starting with the initial `todos` table.
+- `end2end/`
+  TodoMVC spec tests and browser test helpers.
+- `docker/` or root Docker files
+  Runtime and build container definitions plus compose/dev helpers if needed.
+
+If the Leptos starter template strongly prefers an app/server split with fewer crates, keep the same logical boundaries as modules inside fewer crates rather than creating churn later.
+
+## Module and File Organization
+
+### `crates/domain`
+- `src/todo.rs`
+  `Todo`, `TodoId`, `NewTodo`, `UpdateTodo`, `TodoFilter`, `BulkToggle`, `ClearCompletedResult`.
+- `src/error.rs`
+  `AppError`, validation failures, not-found, conflict, infrastructure error categories.
+- `src/lib.rs`
+  Public exports used everywhere else.
+
+### `crates/persistence`
+- `src/pool.rs`
+  `sqlx::PgPool` creation from configuration.
+- `src/repository.rs`
+  `TodoRepository` trait plus `PgTodoRepository`.
+- `src/models.rs`
+  Database row mapping types separate from public domain types if needed.
+- `src/lib.rs`
+  Re-exports for pool and repository.
+
+### `crates/server`
+- `src/config.rs`
+  Environment loading and typed config.
+- `src/logging.rs`
+  `tracing` initialization.
+- `src/state.rs`
+  Shared `AppState` holding config, pool, and repository handles.
+- `src/routes/health.rs`
+  Health endpoint.
+- `src/routes/todos.rs`
+  REST JSON handlers for CRUD and bulk operations.
+- `src/error.rs`
+  Axum response conversion for `AppError`.
+- `src/router.rs`
+  Main router assembly.
+- `src/main.rs`
+  Startup and listener boot.
+
+### `crates/web`
+- `src/app.rs`
+  Root `TodoApp`.
+- `src/components/`
+  `new_todo.rs`, `todo_item.rs`, `footer.rs`, shared UI pieces.
+- `src/server_functions/todos.rs`
+  Leptos server functions calling domain/repository logic.
+- `src/routes.rs`
+  Filter routing and page composition.
+- `src/lib.rs` / `src/main.rs`
+  Leptos entry points matching the chosen scaffold.
+- `style/` or `public/`
+  TodoMVC CSS and static assets.
+
+## Shared Types and API Shape
+- Domain types should be defined once in `domain` and reused by REST handlers, repositories, and Leptos server functions.
+- Use UUIDs for todo identifiers unless the starter or issue constraints force integers. UUIDs reduce client-side coupling and are safe for distributed environments.
+- `Todo` fields:
+  `id`, `title`, `completed`, `created_at`, `updated_at`.
+- JSON DTOs should be explicit:
+  `CreateTodoRequest`, `UpdateTodoRequest`, `TodoResponse`, `ListTodosResponse`.
+- Support both REST endpoints and Leptos server functions over the same repository/service layer instead of duplicating business logic.
+
+## Data and Request Flow
+1. Request enters Axum router or Leptos server function.
+2. Handler validates input into domain command types.
+3. Repository/service executes against PostgreSQL via `sqlx`.
+4. Domain errors map to unified JSON or server-function responses.
+5. UI refreshes reactive resources from canonical server state.
+
+## Key Design Decisions
+- Keep business logic below transport level.
+  REST endpoints and Leptos server functions should share the same repository/service contracts.
+- Introduce a typed `AppConfig` early in issue #2.
+  This avoids ad hoc env parsing across later issues.
+- Standardize error handling before deeper API and UI work.
+  Issue #12 should consolidate earlier endpoint behavior instead of each route inventing its own format.
+- Prefer `tracing` and structured logs from the start.
+  This helps Docker smoke verification and end-to-end debugging later.
+- Use repository traits at the boundary, but do not over-abstract.
+  One production PostgreSQL implementation plus test helpers is enough.
+- Keep the frontend state server-driven.
+  After mutations, refresh the todo list resource instead of maintaining complex optimistic state unless needed for UX.
+- Match TodoMVC behavior closely.
+  Issues #14 through #24 should track the TodoMVC spec, including editing, filtering, counts, toggle-all, and clear-completed semantics.
+
+## Issue Dependency Order
+
+### Foundation
+- #1 Initialize workspace and scaffold
+- #2 Add config and logging
+- #3 Add PostgreSQL pool
+- #4 Add initial migration
+- #5 Add health check
+- #6 Dockerize application
+
+### Backend domain and API
+- #7 Define Todo model and repository layer
+- #8 GET endpoints
+- #9 POST create endpoint
+- #10 PATCH update endpoint
+- #11 DELETE and bulk endpoints
+- #12 Unified error handling
+- #13 Repository and route tests
+
+### Frontend application
+- #14 TodoMVC CSS and base layout
+- #15 Leptos server functions
+- #16 Root app and reactive resource
+- #17 New-todo input
+- #18 TodoItem display/toggle/delete
+- #19 Double-click edit
+- #20 Footer and counters
+- #21 Filter routing
+- #22 Toggle-all
+- #23 Frontend loading and error states
+
+### Validation and delivery
+- #24 End-to-end tests
+- #25 README and deployment docs
+- #26 Production Docker smoke verification
+
+## Critical Cross-Issue Dependencies
+- #3 depends on #2 because pool creation needs typed config and logging.
+- #4 depends on #3 because migration tooling should target the configured database.
+- #7 depends on #3 and #4 because repository code needs both pool and schema.
+- #8 through #11 depend on #7 because routes should not bypass the repository layer.
+- #12 should be applied after the first CRUD routes exist so it can unify real error cases.
+- #13 depends on #7 through #12 because tests should lock the repository and route contracts.
+- #15 depends on #7 through #12 because server functions should reuse stable backend behavior.
+- #16 through #23 depend on #14 and #15 because the UI needs both layout and server integration.
+- #24 depends on #14 through #23 and should validate the same TodoMVC behaviors end to end.
+- #25 and #26 depend on the runtime, test, and container story being stable.
+
+## Implementation Guidance Per Layer
+- Start with the smallest viable scaffold in #1 and avoid premature frontend polish.
+- In #7, keep repository methods aligned to user actions:
+  `list`, `get`, `create`, `update`, `delete`, `toggle_all`, `clear_completed`.
+- In #12, use a single error envelope for REST:
+  `code`, `message`, and optional `details`.
+- In #15, keep Leptos server functions thin and delegate to the same backend logic as REST handlers.
+- In #24, treat TodoMVC compliance as the source of truth for UI semantics, not local interpretation.
+
+## Main Risks to Avoid
+- Splitting todo types separately across API, DB, and UI without a shared domain contract.
+- Embedding SQL directly in route handlers or server functions.
+- Letting Leptos server functions and REST endpoints diverge in validation or behavior.
+- Adding frontend state machinery that drifts from persisted server state.
+- Deferring Docker and config decisions too long, which makes #25 and #26 harder than necessary.
