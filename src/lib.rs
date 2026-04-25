@@ -2,6 +2,9 @@ pub mod app;
 pub mod models {
     pub mod todo;
 }
+pub mod server_fns {
+    pub mod todo_fns;
+}
 
 #[cfg(feature = "ssr")]
 pub mod repo {
